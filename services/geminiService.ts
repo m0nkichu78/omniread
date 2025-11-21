@@ -25,17 +25,9 @@ const getSystemInstruction = (config: ReadingConfig) => {
     2. The 'content' should be a structured summary in Markdown.
     `;
   } else {
-    // FULL MODE
+    // FULL MODE - Simplified
     return `${baseRole}
-    Task: STICTLY TRANSLATE the main article content.
-    
-    CRITICAL RULES FOR FULL MODE:
-    1. TRANSLATE WORD-FOR-WORD: Do not summarize, do not shorten, do not omit any paragraphs.
-    2. PRESERVE STRUCTURE: Keep all headings, subheadings, and paragraph breaks exactly as they are in the source.
-    3. CLEAN CONTENT: Ignore image captions, photo credits, advertisements, navigation links, "read more" links, and sidebars. Only translate the main body text.
-    4. NO META-COMMENTARY: Do not add notes like "Here is the translation". Just return the translation.
-    5. The 'content' field must contain the ENTIRE translated article.
-    `;
+    Task: Translate the article text.`;
   }
 };
 
@@ -67,31 +59,22 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
 
   const targetLangName = langMap[config.targetLanguage];
   
-  const modeInstruction = config.mode === Mode.FULL 
-    ? `STRICT TRANSLATION MODE. 
-       1. Translate the FULL text of the article into ${targetLangName}. 
-       2. Do NOT summarize. 
-       3. Do NOT include image captions or alt text.
-       4. Maintain the original length and structure (paragraphs, headings).` 
-    : `SUMMARIZATION MODE. Summarize the key points into ${targetLangName}.`;
+  let prompt = "";
 
-  // Gemini API constraint: Cannot use responseMimeType/responseSchema WITH tools (like googleSearch).
-  // If isUrl is true, we use tools, so we must ask for JSON in the prompt text instead.
-  let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.\n${modeInstruction}`;
-  
+  // Simplified Prompt Construction
   if (isUrl) {
-    prompt += `\n\nIMPORTANT INSTRUCTIONS:
-    1. Access the URL using Google Search.
-    2. Extract ONLY the main article body text. Ignore headers, footers, ads, and IMAGE CAPTIONS.
-    3. Translate the Title, a short "summaryQuote" hook, and the ENTIRE "content" into ${targetLangName}.
-    4. Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
-    {
-      "title": "string (translated)",
-      "summaryQuote": "string (translated)",
-      "content": "markdown string (translated full text)",
-      "readingTimeMinutes": number,
-      "sourceName": "string"
-    }`;
+    // URL Mode
+    const action = config.mode === Mode.FULL ? "Translate" : "Summarize";
+    prompt = `${action} the article at this URL into ${targetLangName}: "${input}".
+    
+    IMPORTANT: Access the URL via Google Search and return a raw JSON object with these fields translated: title, summaryQuote, content (markdown), readingTimeMinutes, sourceName.`;
+  } else {
+    // Text Mode
+    if (config.mode === Mode.FULL) {
+        prompt = `Translate the following article into ${targetLangName}: "${input}"`;
+    } else {
+        prompt = `Summarize the following text into ${targetLangName}: "${input}"`;
+    }
   }
   
   const response = await ai.models.generateContent({
