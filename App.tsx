@@ -4,6 +4,7 @@ import HomeView from './components/HomeView';
 import ReaderView from './components/ReaderView';
 import LibrarySidebar from './components/LibrarySidebar';
 import SettingsModal from './components/SettingsModal';
+import Toast, { ToastType } from './components/Toast';
 import { ReadingConfig, ProcessedArticle } from './types';
 import { processContent, generateSpeech } from './services/geminiService';
 
@@ -16,6 +17,13 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [apiKey, setApiKey] = useState<string>('');
+  
+  // Toast State
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  const showToast = (message: string, type: ToastType = 'info') => {
+    setToast({ message, type });
+  };
 
   // Load initialization data (history, dark mode, api key)
   useEffect(() => {
@@ -62,6 +70,7 @@ const App: React.FC = () => {
       setApiKey(key);
       if (key) {
         localStorage.setItem('omniread_api_key', key);
+        showToast("Clé API sauvegardée avec succès.", 'success');
       } else {
         localStorage.removeItem('omniread_api_key');
       }
@@ -75,12 +84,11 @@ const App: React.FC = () => {
   }, [history]);
 
   const handleProcess = async (input: string, config: ReadingConfig) => {
-    // Strictly use user provided key
     const effectiveKey = apiKey;
 
     if (!effectiveKey) {
         setIsSettingsOpen(true);
-        alert("Veuillez configurer votre clé API Google Gemini pour continuer.");
+        showToast("Veuillez configurer votre clé API Google Gemini pour continuer.", 'info');
         return;
     }
 
@@ -95,14 +103,16 @@ const App: React.FC = () => {
           const textToSpeak = `${result.title}. ${result.summaryQuote}. ${result.content}`;
           audioUrl = await generateSpeech(textToSpeak, effectiveKey);
         } catch (audioError) {
-          console.error("Audio generation failed automatically (will be available on manual click):", audioError);
+          console.warn("Auto-TTS failed:", audioError);
+          // We do NOT block the app flow here, just show a warning toast
+          showToast("L'article est prêt, mais l'audio n'a pas pu être généré automatiquement (quota ?).", 'info');
         }
 
         const newArticle: ProcessedArticle = {
             id: Date.now().toString(),
             date: new Date().toLocaleDateString('fr-FR'),
             config,
-            audioUrl, // Attach the auto-generated audio
+            audioUrl, // Attach the auto-generated audio if successful
             ...result
         };
 
@@ -110,14 +120,17 @@ const App: React.FC = () => {
         setHistory(prev => [newArticle, ...prev]);
         setCurrentArticle(newArticle);
         setView('READER');
-    } catch (error) {
+        showToast("Traitement terminé avec succès !", 'success');
+        
+    } catch (error: any) {
         console.error("Processing error:", error);
-        if (error instanceof Error && error.message.includes("Clé API")) {
+        
+        // Check specifically for API Key error to reopen settings
+        if (error.message && (error.message.includes('Clé API') || error.message.includes('invalide'))) {
             setIsSettingsOpen(true);
-            alert("Erreur de clé API. Veuillez vérifier votre configuration.");
-        } else {
-            alert("Une erreur est survenue lors du traitement. Veuillez vérifier votre connexion et votre clé API.");
         }
+        
+        showToast(error.message || "Une erreur est survenue.", 'error');
     } finally {
         setIsProcessing(false);
     }
@@ -126,6 +139,7 @@ const App: React.FC = () => {
   const handleClearHistory = () => {
       if(window.confirm("Voulez-vous vraiment effacer tout l'historique ?")) {
           setHistory([]);
+          showToast("Historique effacé.", 'info');
       }
   };
 
@@ -148,6 +162,7 @@ const App: React.FC = () => {
                 article={currentArticle} 
                 onBack={() => setView('HOME')}
                 apiKey={apiKey}
+                onShowToast={showToast}
             />
         )}
       </main>
@@ -157,8 +172,6 @@ const App: React.FC = () => {
         onClose={() => setIsLibraryOpen(false)} 
         history={history}
         onSelectArticle={(article) => {
-            // When selecting from history, audioUrl is likely undefined (not saved to LS)
-            // The ReaderView handles this by allowing regeneration
             setCurrentArticle(article);
             setView('READER');
         }}
@@ -171,6 +184,14 @@ const App: React.FC = () => {
         apiKey={apiKey}
         onSaveApiKey={handleSaveApiKey}
       />
+
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 };
