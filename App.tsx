@@ -37,6 +37,9 @@ const App: React.FC = () => {
     const savedKey = localStorage.getItem('omniread_api_key');
     if (savedKey) {
         setApiKey(savedKey);
+    } else {
+        // Show settings modal on first visit if no key is configured
+        setIsSettingsOpen(true);
     }
   }, []);
 
@@ -72,8 +75,8 @@ const App: React.FC = () => {
   }, [history]);
 
   const handleProcess = async (input: string, config: ReadingConfig) => {
-    // Check for API Key (User supplied OR Env variable)
-    const effectiveKey = apiKey || process.env.API_KEY;
+    // Strictly use user provided key
+    const effectiveKey = apiKey;
 
     if (!effectiveKey) {
         setIsSettingsOpen(true);
@@ -133,7 +136,7 @@ const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         isDarkMode={isDarkMode}
         toggleTheme={toggleTheme}
-        hasApiKey={!!apiKey || !!process.env.API_KEY}
+        hasApiKey={!!apiKey}
       />
 
       <main className="flex-1 flex flex-col w-full">
@@ -144,7 +147,7 @@ const App: React.FC = () => {
             <ReaderView 
                 article={currentArticle} 
                 onBack={() => setView('HOME')}
-                apiKey={apiKey || (process.env.API_KEY as string)}
+                apiKey={apiKey}
             />
         )}
       </main>

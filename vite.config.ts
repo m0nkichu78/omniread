@@ -9,9 +9,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Important: Remplace process.env.API_KEY par la valeur réelle lors du build
-      // Ensure we pass a string even if API_KEY is undefined to avoid build errors
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
+      // Ensure process.env.API_KEY is always empty string in production build
+      // to enforce BYOK (Bring Your Own Key)
+      'process.env.API_KEY': JSON.stringify('')
     }
   };
 });

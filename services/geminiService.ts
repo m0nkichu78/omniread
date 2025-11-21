@@ -27,8 +27,8 @@ const getSystemInstruction = (config: ReadingConfig) => {
 };
 
 export const processContent = async (input: string, config: ReadingConfig, apiKey: string): Promise<Omit<ProcessedArticle, 'id' | 'date' | 'config'>> => {
-  // Prefer the provided key (from user settings), fallback to env if available
-  const keyToUse = apiKey || process.env.API_KEY;
+  // Strict reliance on provided apiKey
+  const keyToUse = apiKey;
 
   if (!keyToUse) {
     throw new Error("Clé API manquante. Veuillez configurer votre clé API dans les paramètres.");
@@ -169,8 +169,8 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000): ArrayBuffer 
 }
 
 export const generateSpeech = async (text: string, apiKey: string, voiceName: 'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' = 'Kore'): Promise<string> => {
-  // Prefer the provided key (from user settings), fallback to env if available
-  const keyToUse = apiKey || process.env.API_KEY;
+  // Strict reliance on provided apiKey
+  const keyToUse = apiKey;
 
   if (!keyToUse) {
      throw new Error("Clé API manquante");
