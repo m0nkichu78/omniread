@@ -115,7 +115,7 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey }) => {
       </button>
 
       {/* Sticky Audio Player */}
-      <div className="sticky top-4 z-30 mx-4 md:mx-0 bg-white dark:bg-stone-800 rounded-2xl shadow-lg border border-stone-100 dark:border-stone-700 p-2 md:p-3 mb-12 transition-colors">
+      <div className="sticky top-4 z-30 mx-6 md:mx-0 bg-white dark:bg-stone-800 rounded-2xl shadow-lg border border-stone-100 dark:border-stone-700 p-2 md:p-3 mb-12 transition-colors">
          <div className="flex items-center gap-4">
             <button 
                 onClick={togglePlay}

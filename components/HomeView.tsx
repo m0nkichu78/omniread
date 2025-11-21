@@ -40,7 +40,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onProcess, isProcessing }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 w-full max-w-4xl mx-auto">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 w-full max-w-4xl mx-auto">
       
       {/* Hero Text */}
       <div className="text-center mb-10 space-y-4 animate-fade-in-up">
@@ -63,7 +63,8 @@ const HomeView: React.FC<HomeViewProps> = ({ onProcess, isProcessing }) => {
           }`}
         >
           <FileTextIcon className="w-4 h-4" />
-          {Mode.FULL}
+          <span className="hidden md:inline">Lecture Complète</span>
+          <span className="md:hidden">Complet</span>
         </button>
         <button
           onClick={() => setConfig({ ...config, mode: Mode.SUMMARY })}
@@ -74,7 +75,8 @@ const HomeView: React.FC<HomeViewProps> = ({ onProcess, isProcessing }) => {
           }`}
         >
           <SparklesIcon className="w-4 h-4" />
-          {Mode.SUMMARY}
+          <span className="hidden md:inline">Résumé Essentiel</span>
+          <span className="md:hidden">Résumé</span>
         </button>
       </div>
 
