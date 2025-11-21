@@ -1,5 +1,5 @@
 import React from 'react';
-import { MoonIcon, LibraryIcon, SettingsIcon, KeyIcon } from './Icons';
+import { MoonIcon, LibraryIcon, KeyIcon } from './Icons';
 
 interface HeaderProps {
   onOpenLibrary: () => void;
@@ -28,14 +28,6 @@ const Header: React.FC<HeaderProps> = ({ onOpenLibrary, onOpenSettings, isDarkMo
         >
           <KeyIcon className="w-3 h-3" />
           {hasApiKey ? 'Clé API active' : 'Configurer Clé API'}
-        </button>
-
-        <button 
-          onClick={onOpenSettings}
-          className="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors text-stone-600 dark:text-stone-400"
-          aria-label="Paramètres"
-        >
-          <SettingsIcon className="w-5 h-5" />
         </button>
 
         <button 
