@@ -12,30 +12,29 @@ const langMap: Record<Language, string> = {
 };
 
 const getSystemInstruction = (config: ReadingConfig) => {
-  const baseRole = `You are an expert editor and translator named OmniRead.
-  Your goal is to transform raw text or a URL content into a calm, readable experience.
+  const baseRole = `You are an expert translator named OmniRead.
   Target Language: ${langMap[config.targetLanguage]}
   Tone: ${config.tone}`;
 
   if (config.mode === Mode.SUMMARY) {
     return `${baseRole}
-    Format: A concise summary of the key points.
+    Task: Create a concise summary of the content.
     
-    Specific formatting rules:
+    Rules:
     1. The 'summaryQuote' should be a 1-2 sentence extraction or synthesis.
     2. The 'content' should be a structured summary in Markdown.
     `;
   } else {
     // FULL MODE
     return `${baseRole}
-    Format: A STRICT, FULL TRANSLATION of the original content.
+    Task: STICTLY TRANSLATE the main article content.
     
-    Specific formatting rules:
-    1. The 'summaryQuote' should be a 1-2 sentence extraction or synthesis serving as a "hook".
-    2. The 'content' MUST be the COMPLETE article body translated.
-    3. CRITICAL: PRESERVE the exact structure of the original article. Keep all headings (H1, H2, H3), lists, and paragraph breaks exactly as they are in the source.
-    4. DO NOT SUMMARIZE the 'content'. Translate it paragraph by paragraph.
-    5. Remove only clutter like ads, navigation links, or sidebars. Keep the main article text intact.
+    CRITICAL RULES FOR FULL MODE:
+    1. TRANSLATE WORD-FOR-WORD: Do not summarize, do not shorten, do not omit any paragraphs.
+    2. PRESERVE STRUCTURE: Keep all headings, subheadings, and paragraph breaks exactly as they are in the source.
+    3. CLEAN CONTENT: Ignore image captions, photo credits, advertisements, navigation links, "read more" links, and sidebars. Only translate the main body text.
+    4. NO META-COMMENTARY: Do not add notes like "Here is the translation". Just return the translation.
+    5. The 'content' field must contain the ENTIRE translated article.
     `;
   }
 };
@@ -67,25 +66,29 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
   };
 
   const targetLangName = langMap[config.targetLanguage];
+  
   const modeInstruction = config.mode === Mode.FULL 
-    ? "Translate the entire article content word-for-word. PRESERVE ALL HEADINGS, SECTIONS, AND STRUCTURE. Do not summarize." 
-    : "Summarize the key points of the article.";
+    ? `STRICT TRANSLATION MODE. 
+       1. Translate the FULL text of the article into ${targetLangName}. 
+       2. Do NOT summarize. 
+       3. Do NOT include image captions or alt text.
+       4. Maintain the original length and structure (paragraphs, headings).` 
+    : `SUMMARIZATION MODE. Summarize the key points into ${targetLangName}.`;
 
   // Gemini API constraint: Cannot use responseMimeType/responseSchema WITH tools (like googleSearch).
   // If isUrl is true, we use tools, so we must ask for JSON in the prompt text instead.
-  // We explicitly add the translation instruction here to ensure it happens during the tool use phase.
-  let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.\nMode: ${config.mode}.\n${modeInstruction}`;
+  let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.\n${modeInstruction}`;
   
   if (isUrl) {
-    prompt += `\n\nIMPORTANT: Retrieve the content from the URL using Google Search. Translate the Title, Summary, and Content into ${targetLangName}. 
-    
-    ${config.mode === Mode.FULL ? "CRITICAL: For the 'content' field, you MUST return the FULL translated text respecting the original article structure (headings, paragraphs). Do not shorten it." : ""}
-    
-    Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
+    prompt += `\n\nIMPORTANT INSTRUCTIONS:
+    1. Access the URL using Google Search.
+    2. Extract ONLY the main article body text. Ignore headers, footers, ads, and IMAGE CAPTIONS.
+    3. Translate the Title, a short "summaryQuote" hook, and the ENTIRE "content" into ${targetLangName}.
+    4. Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
     {
       "title": "string (translated)",
       "summaryQuote": "string (translated)",
-      "content": "markdown string (translated)",
+      "content": "markdown string (translated full text)",
       "readingTimeMinutes": number,
       "sourceName": "string"
     }`;
