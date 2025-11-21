@@ -12,18 +12,32 @@ const langMap: Record<Language, string> = {
 };
 
 const getSystemInstruction = (config: ReadingConfig) => {
-  return `You are an expert editor and translator named OmniRead.
+  const baseRole = `You are an expert editor and translator named OmniRead.
   Your goal is to transform raw text or a URL content into a calm, readable experience.
-  
   Target Language: ${langMap[config.targetLanguage]}
-  Tone: ${config.tone}
-  Format: ${config.mode === Mode.SUMMARY ? 'A concise summary of the key points' : 'The full content, well-formatted'}
-  
-  Specific formatting rules:
-  1. The 'summaryQuote' should be a 1-2 sentence extraction or synthesis that captures the essence, serving as a "hook" or spiritual takeaway.
-  2. The 'content' should be formatted in clean Markdown with headers (#, ##), paragraphs, and lists if necessary. Remove clutter like ads, nav links, etc.
-  3. If the input is a URL, extract the main article content.
-  `;
+  Tone: ${config.tone}`;
+
+  if (config.mode === Mode.SUMMARY) {
+    return `${baseRole}
+    Format: A concise summary of the key points.
+    
+    Specific formatting rules:
+    1. The 'summaryQuote' should be a 1-2 sentence extraction or synthesis.
+    2. The 'content' should be a structured summary in Markdown.
+    `;
+  } else {
+    // FULL MODE
+    return `${baseRole}
+    Format: A STRICT, FULL TRANSLATION of the original content.
+    
+    Specific formatting rules:
+    1. The 'summaryQuote' should be a 1-2 sentence extraction or synthesis serving as a "hook".
+    2. The 'content' MUST be the COMPLETE article body translated.
+    3. CRITICAL: PRESERVE the exact structure of the original article. Keep all headings (H1, H2, H3), lists, and paragraph breaks exactly as they are in the source.
+    4. DO NOT SUMMARIZE the 'content'. Translate it paragraph by paragraph.
+    5. Remove only clutter like ads, navigation links, or sidebars. Keep the main article text intact.
+    `;
+  }
 };
 
 export const processContent = async (input: string, config: ReadingConfig, apiKey: string): Promise<Omit<ProcessedArticle, 'id' | 'date' | 'config'>> => {
@@ -53,14 +67,21 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
   };
 
   const targetLangName = langMap[config.targetLanguage];
+  const modeInstruction = config.mode === Mode.FULL 
+    ? "Translate the entire article content word-for-word. PRESERVE ALL HEADINGS, SECTIONS, AND STRUCTURE. Do not summarize." 
+    : "Summarize the key points of the article.";
 
   // Gemini API constraint: Cannot use responseMimeType/responseSchema WITH tools (like googleSearch).
   // If isUrl is true, we use tools, so we must ask for JSON in the prompt text instead.
   // We explicitly add the translation instruction here to ensure it happens during the tool use phase.
-  let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.`;
+  let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.\nMode: ${config.mode}.\n${modeInstruction}`;
   
   if (isUrl) {
-    prompt += `\n\nIMPORTANT: Retrieve the content from the URL using Google Search. Translate the Title, Summary, and Content into ${targetLangName}. Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
+    prompt += `\n\nIMPORTANT: Retrieve the content from the URL using Google Search. Translate the Title, Summary, and Content into ${targetLangName}. 
+    
+    ${config.mode === Mode.FULL ? "CRITICAL: For the 'content' field, you MUST return the FULL translated text respecting the original article structure (headings, paragraphs). Do not shorten it." : ""}
+    
+    Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
     {
       "title": "string (translated)",
       "summaryQuote": "string (translated)",
