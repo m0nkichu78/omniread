@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { SearchIcon, ConfigIcon, ArrowRightIcon, FileTextIcon, SparklesIcon } from './Icons';
+import { SearchIcon, InstantMixIcon, ArrowRightIcon, FileTextIcon, SparklesIcon } from './Icons';
 import { Language, Tone, Mode, ReadingConfig } from '../types';
 
 interface HomeViewProps {
@@ -97,7 +97,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onProcess, isProcessing }) => {
                 onClick={() => setShowConfig(!showConfig)}
                 className={`p-2.5 rounded-full transition-colors ${showConfig ? 'bg-stone-100 dark:bg-stone-700 text-brand-orange' : 'text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700'}`}
              >
-                <ConfigIcon className="w-5 h-5" />
+                <InstantMixIcon className="w-5 h-5" />
              </button>
              <button 
                 type="submit"
