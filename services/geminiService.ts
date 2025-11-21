@@ -52,16 +52,19 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
     required: ["title", "summaryQuote", "content", "readingTimeMinutes", "sourceName"]
   };
 
+  const targetLangName = langMap[config.targetLanguage];
+
   // Gemini API constraint: Cannot use responseMimeType/responseSchema WITH tools (like googleSearch).
   // If isUrl is true, we use tools, so we must ask for JSON in the prompt text instead.
-  let prompt = `Process the following content: "${input}"`;
+  // We explicitly add the translation instruction here to ensure it happens during the tool use phase.
+  let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.`;
   
   if (isUrl) {
-    prompt += `\n\nIMPORTANT: Retrieve the content from the URL using Google Search. Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
+    prompt += `\n\nIMPORTANT: Retrieve the content from the URL using Google Search. Translate the Title, Summary, and Content into ${targetLangName}. Return the result strictly as a raw JSON object (no markdown formatting) matching this structure:
     {
-      "title": "string",
-      "summaryQuote": "string",
-      "content": "markdown string",
+      "title": "string (translated)",
+      "summaryQuote": "string (translated)",
+      "content": "markdown string (translated)",
       "readingTimeMinutes": number,
       "sourceName": "string"
     }`;
