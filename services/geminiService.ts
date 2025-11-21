@@ -98,9 +98,10 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
   }
   
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-pro-preview',
     contents: prompt,
     config: {
+      temperature: 0.2,
       systemInstruction: getSystemInstruction(config),
       tools: isUrl ? [{ googleSearch: {} }] : undefined,
       // Only apply structured output config if NOT using tools
