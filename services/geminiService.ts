@@ -26,12 +26,15 @@ const getSystemInstruction = (config: ReadingConfig) => {
   `;
 };
 
-export const processContent = async (input: string, config: ReadingConfig): Promise<Omit<ProcessedArticle, 'id' | 'date' | 'config'>> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing");
+export const processContent = async (input: string, config: ReadingConfig, apiKey: string): Promise<Omit<ProcessedArticle, 'id' | 'date' | 'config'>> => {
+  // Prefer the provided key (from user settings), fallback to env if available
+  const keyToUse = apiKey || process.env.API_KEY;
+
+  if (!keyToUse) {
+    throw new Error("Clé API manquante. Veuillez configurer votre clé API dans les paramètres.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: keyToUse });
 
   // Determine if input is a URL to use Grounding
   const isUrl = input.trim().startsWith('http');
@@ -165,11 +168,18 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000): ArrayBuffer 
   return buffer;
 }
 
-export const generateSpeech = async (text: string, voiceName: 'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' = 'Kore'): Promise<string> => {
+export const generateSpeech = async (text: string, apiKey: string, voiceName: 'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' = 'Kore'): Promise<string> => {
+  // Prefer the provided key (from user settings), fallback to env if available
+  const keyToUse = apiKey || process.env.API_KEY;
+
+  if (!keyToUse) {
+     throw new Error("Clé API manquante");
+  }
+
   // Limit text length for TTS preview if necessary to avoid token limits
   const textToSpeak = text.length > 4000 ? text.substring(0, 4000) + "..." : text;
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: keyToUse });
   
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",

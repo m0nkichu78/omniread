@@ -3,23 +3,26 @@ import Header from './components/Header';
 import HomeView from './components/HomeView';
 import ReaderView from './components/ReaderView';
 import LibrarySidebar from './components/LibrarySidebar';
+import SettingsModal from './components/SettingsModal';
 import { ReadingConfig, ProcessedArticle } from './types';
 import { processContent, generateSpeech } from './services/geminiService';
 
 const App: React.FC = () => {
   const [view, setView] = useState<'HOME' | 'READER'>('HOME');
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentArticle, setCurrentArticle] = useState<ProcessedArticle | null>(null);
   const [history, setHistory] = useState<ProcessedArticle[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [apiKey, setApiKey] = useState<string>('');
 
-  // Load history from local storage
+  // Load initialization data (history, dark mode, api key)
   useEffect(() => {
-    const saved = localStorage.getItem('omniread_history');
-    if (saved) {
+    const savedHistory = localStorage.getItem('omniread_history');
+    if (savedHistory) {
         try {
-            setHistory(JSON.parse(saved));
+            setHistory(JSON.parse(savedHistory));
         } catch (e) {
             console.error("Failed to load history");
         }
@@ -28,6 +31,12 @@ const App: React.FC = () => {
     // Check system preference for dark mode
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setIsDarkMode(true);
+    }
+
+    // Load API Key
+    const savedKey = localStorage.getItem('omniread_api_key');
+    if (savedKey) {
+        setApiKey(savedKey);
     }
   }, []);
 
@@ -46,6 +55,15 @@ const App: React.FC = () => {
     setIsDarkMode(!isDarkMode);
   };
 
+  const handleSaveApiKey = (key: string) => {
+      setApiKey(key);
+      if (key) {
+        localStorage.setItem('omniread_api_key', key);
+      } else {
+        localStorage.removeItem('omniread_api_key');
+      }
+  };
+
   // Save history
   useEffect(() => {
     // We don't save audioUrl to localStorage as Blob URLs expire
@@ -54,19 +72,27 @@ const App: React.FC = () => {
   }, [history]);
 
   const handleProcess = async (input: string, config: ReadingConfig) => {
+    // Check for API Key (User supplied OR Env variable)
+    const effectiveKey = apiKey || process.env.API_KEY;
+
+    if (!effectiveKey) {
+        setIsSettingsOpen(true);
+        alert("Veuillez configurer votre clé API Google Gemini pour continuer.");
+        return;
+    }
+
     setIsProcessing(true);
     try {
         // 1. Translate/Summarize
-        const result = await processContent(input, config);
+        const result = await processContent(input, config, effectiveKey);
         
         // 2. Generate Audio Immediately
         let audioUrl: string | undefined;
         try {
           const textToSpeak = `${result.title}. ${result.summaryQuote}. ${result.content}`;
-          audioUrl = await generateSpeech(textToSpeak);
+          audioUrl = await generateSpeech(textToSpeak, effectiveKey);
         } catch (audioError) {
           console.error("Audio generation failed automatically (will be available on manual click):", audioError);
-          // We continue even if audio fails, so the user gets the text
         }
 
         const newArticle: ProcessedArticle = {
@@ -83,7 +109,12 @@ const App: React.FC = () => {
         setView('READER');
     } catch (error) {
         console.error("Processing error:", error);
-        alert("Une erreur est survenue lors du traitement. Veuillez vérifier votre clé API ou réessayer.");
+        if (error instanceof Error && error.message.includes("Clé API")) {
+            setIsSettingsOpen(true);
+            alert("Erreur de clé API. Veuillez vérifier votre configuration.");
+        } else {
+            alert("Une erreur est survenue lors du traitement. Veuillez vérifier votre connexion et votre clé API.");
+        }
     } finally {
         setIsProcessing(false);
     }
@@ -99,8 +130,10 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col relative overflow-x-hidden transition-colors duration-300 dark:bg-stone-900">
       <Header 
         onOpenLibrary={() => setIsLibraryOpen(true)} 
+        onOpenSettings={() => setIsSettingsOpen(true)}
         isDarkMode={isDarkMode}
         toggleTheme={toggleTheme}
+        hasApiKey={!!apiKey || !!process.env.API_KEY}
       />
 
       <main className="flex-1 flex flex-col w-full">
@@ -110,7 +143,8 @@ const App: React.FC = () => {
         {view === 'READER' && currentArticle && (
             <ReaderView 
                 article={currentArticle} 
-                onBack={() => setView('HOME')} 
+                onBack={() => setView('HOME')}
+                apiKey={apiKey || (process.env.API_KEY as string)}
             />
         )}
       </main>
@@ -126,6 +160,13 @@ const App: React.FC = () => {
             setView('READER');
         }}
         onClearHistory={handleClearHistory}
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)}
+        apiKey={apiKey}
+        onSaveApiKey={handleSaveApiKey}
       />
     </div>
   );

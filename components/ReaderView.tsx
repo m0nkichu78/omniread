@@ -7,9 +7,10 @@ import ReactMarkdown from 'react-markdown';
 interface ReaderViewProps {
   article: ProcessedArticle;
   onBack: () => void;
+  apiKey: string;
 }
 
-const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack }) => {
+const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   // Use audioUrl from article if available (auto-generated), otherwise null
@@ -53,14 +54,19 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack }) => {
             setIsGeneratingAudio(true);
             // Concatenate title, summary and some content for speech
             const textToSpeak = `${article.title}. ${article.summaryQuote}. ${article.content}`;
-            const url = await generateSpeech(textToSpeak);
+            // Use the apiKey passed from props
+            const url = await generateSpeech(textToSpeak, apiKey);
             setAudioUrl(url);
             setShouldAutoPlay(true);
             setIsGeneratingAudio(false);
         } catch (error) {
             console.error("TTS Error", error);
             setIsGeneratingAudio(false);
-            alert("Erreur lors de la génération audio.");
+            if (error instanceof Error && error.message.includes("Clé API")) {
+              alert("Clé API manquante. Veuillez la configurer dans les paramètres.");
+            } else {
+              alert("Erreur lors de la génération audio.");
+            }
         }
     } else {
         if (audioRef.current) {
@@ -197,12 +203,6 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack }) => {
          </div>
 
          {/* Main Content (Markdown) */}
-         {/* 
-            prose-headings:font-serif applied to ensure h1, h2, h3 use Instrument Serif 
-            prose-invert logic handled by dark mode prose (tailwind typography plugin needs dark mode config usually, 
-            but we can manually override or use standard prose-invert if available)
-            We use standard tailwind dark mode overrides here for custom control.
-         */}
          <div className="prose prose-stone prose-lg max-w-none font-sans text-stone-800 dark:text-stone-300 leading-loose prose-headings:font-serif prose-headings:font-normal prose-headings:text-brand-dark dark:prose-headings:text-stone-100">
             <ReactMarkdown>
                 {article.content}
