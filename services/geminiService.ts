@@ -11,39 +11,6 @@ const langMap: Record<Language, string> = {
   [Language.JAPANESE]: 'Japanese',
 };
 
-/**
- * Helper to parse and throw user-friendly errors based on API responses
- */
-const handleGeminiError = (error: any): never => {
-  console.error("Gemini API Raw Error:", error);
-
-  const errorMessage = error?.message || '';
-  const status = error?.status || error?.response?.status;
-
-  // Handle Quota Exceeded (429)
-  if (status === 429 || errorMessage.includes('429') || errorMessage.includes('quota')) {
-    throw new Error("⚠️ Quota dépassé. Le service gratuit est saturé momentanément. Veuillez réessayer dans quelques instants ou changer de clé API.");
-  }
-
-  // Handle Invalid Key (400/403 usually implies permission or key issues)
-  if (errorMessage.includes('API key') || status === 403 || errorMessage.includes('PERMISSION_DENIED')) {
-    throw new Error("🔑 Clé API invalide ou expirée. Veuillez vérifier vos paramètres.");
-  }
-
-  // Handle Model Not Found (404)
-  if (status === 404 || errorMessage.includes('not found')) {
-    throw new Error("Le modèle d'IA est temporairement indisponible. Veuillez réessayer plus tard.");
-  }
-
-  // Handle Safety/Content Filters
-  if (errorMessage.includes('SAFETY') || errorMessage.includes('blocked')) {
-    throw new Error("Le contenu a été bloqué par les filtres de sécurité de l'IA.");
-  }
-
-  // Fallback generic error
-  throw new Error("Une erreur technique est survenue lors de la communication avec l'IA.");
-};
-
 const getSystemInstruction = (config: ReadingConfig) => {
   const baseRole = `You are an expert technical translator specializing in absolute structural fidelity. named OmniRead.
   Target Language: ${langMap[config.targetLanguage]}
@@ -76,6 +43,7 @@ Your output must be a perfect structural mirror of the input; only the language 
 };
 
 export const processContent = async (input: string, config: ReadingConfig, apiKey: string): Promise<Omit<ProcessedArticle, 'id' | 'date' | 'config'>> => {
+  // Strict reliance on provided apiKey
   const keyToUse = apiKey;
 
   if (!keyToUse) {
@@ -83,8 +51,11 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
   }
 
   const ai = new GoogleGenAI({ apiKey: keyToUse });
+
+  // Determine if input is a URL to use Grounding
   const isUrl = input.trim().startsWith('http');
 
+  // Define the expected schema structure
   const responseSchema = {
     type: Type.OBJECT,
     properties: {
@@ -107,6 +78,8 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
        4. Maintain the original length and structure (paragraphs, headings).` 
     : `SUMMARIZATION MODE. Summarize the key points into ${targetLangName}.`;
 
+  // Gemini API constraint: Cannot use responseMimeType/responseSchema WITH tools (like googleSearch).
+  // If isUrl is true, we use tools, so we must ask for JSON in the prompt text instead.
   let prompt = `Process the following content: "${input}".\nTarget Language: ${targetLangName}.\n${modeInstruction}`;
   
   if (isUrl) {
@@ -124,56 +97,56 @@ export const processContent = async (input: string, config: ReadingConfig, apiKe
     }`;
   }
   
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        temperature: 0.2,
-        systemInstruction: getSystemInstruction(config),
-        tools: isUrl ? [{ googleSearch: {} }] : undefined,
-        responseMimeType: isUrl ? undefined : "application/json",
-        responseSchema: isUrl ? undefined : responseSchema
-      }
-    });
-
-    if (!response.text) {
-      throw new Error("Aucune réponse générée par l'IA.");
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: prompt,
+    config: {
+      temperature: 0.2,
+      systemInstruction: getSystemInstruction(config),
+      tools: isUrl ? [{ googleSearch: {} }] : undefined,
+      // Only apply structured output config if NOT using tools
+      responseMimeType: isUrl ? undefined : "application/json",
+      responseSchema: isUrl ? undefined : responseSchema
     }
+  });
 
-    let jsonStr = response.text;
-    if (isUrl) {
-      jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
-    }
-
-    let data;
-    try {
-      data = JSON.parse(jsonStr);
-    } catch (e) {
-      console.error("JSON Parse Error", e);
-      throw new Error("Format de réponse invalide. Veuillez réessayer.");
-    }
-    
-    let languageCode = 'FR';
-    if (config.targetLanguage === Language.ENGLISH) languageCode = 'EN';
-    if (config.targetLanguage === Language.SPANISH) languageCode = 'ES';
-    if (config.targetLanguage === Language.GERMAN) languageCode = 'DE';
-    if (config.targetLanguage === Language.ITALIAN) languageCode = 'IT';
-    if (config.targetLanguage === Language.JAPANESE) languageCode = 'JP';
-
-    return {
-      title: data.title,
-      summaryQuote: data.summaryQuote,
-      content: data.content,
-      readingTimeMinutes: data.readingTimeMinutes,
-      sourceName: data.sourceName,
-      originalUrl: isUrl ? input : undefined,
-      languageCode
-    };
-
-  } catch (error) {
-    handleGeminiError(error);
+  if (!response.text) {
+    throw new Error("Failed to generate content");
   }
+
+  let jsonStr = response.text;
+
+  // Clean up potential markdown code blocks if the model added them (common when not using JSON mode)
+  if (isUrl) {
+    jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+  }
+
+  let data;
+  try {
+    data = JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("JSON Parse Error", e);
+    console.log("Raw text received:", response.text);
+    throw new Error("Failed to parse response from AI");
+  }
+  
+  // Map Language enum to simple code for badge (e.g., 'Français' -> 'FR')
+  let languageCode = 'FR';
+  if (config.targetLanguage === Language.ENGLISH) languageCode = 'EN';
+  if (config.targetLanguage === Language.SPANISH) languageCode = 'ES';
+  if (config.targetLanguage === Language.GERMAN) languageCode = 'DE';
+  if (config.targetLanguage === Language.ITALIAN) languageCode = 'IT';
+  if (config.targetLanguage === Language.JAPANESE) languageCode = 'JP';
+
+  return {
+    title: data.title,
+    summaryQuote: data.summaryQuote,
+    content: data.content,
+    readingTimeMinutes: data.readingTimeMinutes,
+    sourceName: data.sourceName,
+    originalUrl: isUrl ? input : undefined,
+    languageCode
+  };
 };
 
 // Helper to write string to DataView
@@ -227,47 +200,50 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000): ArrayBuffer 
 }
 
 export const generateSpeech = async (text: string, apiKey: string, voiceName: 'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' = 'Kore'): Promise<string> => {
+  // Strict reliance on provided apiKey
   const keyToUse = apiKey;
 
   if (!keyToUse) {
      throw new Error("Clé API manquante");
   }
 
+  // Limit text length for TTS preview if necessary to avoid token limits
   const textToSpeak = text.length > 4000 ? text.substring(0, 4000) + "..." : text;
+
   const ai = new GoogleGenAI({ apiKey: keyToUse });
   
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: textToSpeak }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceName },
-          },
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: textToSpeak }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: voiceName },
         },
       },
-    });
+    },
+  });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    
-    if (!base64Audio) {
-      throw new Error("Erreur de génération audio: Données vides.");
-    }
-
-    const binaryString = atob(base64Audio);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    const wavBuffer = pcmToWav(bytes, 24000);
-    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-    return URL.createObjectURL(blob);
-
-  } catch (error) {
-    handleGeminiError(error);
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  
+  if (!base64Audio) {
+    throw new Error("Failed to generate audio");
   }
+
+  // Convert Base64 -> Uint8Array
+  const binaryString = atob(base64Audio);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  // Convert Raw PCM -> WAV
+  // Gemini 2.5 Flash TTS typically uses 24kHz
+  const wavBuffer = pcmToWav(bytes, 24000);
+
+  // Create Blob URL
+  const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+  return URL.createObjectURL(blob);
 };

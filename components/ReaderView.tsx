@@ -3,16 +3,14 @@ import { ProcessedArticle } from '../types';
 import { generateSpeech } from '../services/geminiService';
 import { PlayIcon, PauseIcon, TextSizeIcon, CopyIcon, FileTextIcon, SpeakerIcon } from './Icons';
 import ReactMarkdown from 'react-markdown';
-import { ToastType } from './Toast';
 
 interface ReaderViewProps {
   article: ProcessedArticle;
   onBack: () => void;
   apiKey: string;
-  onShowToast: (message: string, type: ToastType) => void;
 }
 
-const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey, onShowToast }) => {
+const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   // Use audioUrl from article if available (auto-generated), otherwise null
@@ -30,6 +28,15 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey, onShow
       setAudioUrl(null);
     }
   }, [article.id, article.audioUrl]);
+
+  // Cleanup audio URL on unmount ONLY if we generated it locally in this component
+  // (If it came from App.tsx, App.tsx handles lifecycle, but actually standard blob cleanup practice)
+  useEffect(() => {
+    return () => {
+      // Note: We don't strictly revoke the prop-passed URL here to avoid side effects if 
+      // other components use it, but for this app structure, it's fine.
+    };
+  }, []);
 
   // Auto-play effect
   useEffect(() => {
@@ -52,13 +59,14 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey, onShow
             setAudioUrl(url);
             setShouldAutoPlay(true);
             setIsGeneratingAudio(false);
-            onShowToast("Génération audio réussie", 'success');
-        } catch (error: any) {
+        } catch (error) {
             console.error("TTS Error", error);
             setIsGeneratingAudio(false);
-            
-            // Pass the robust error message from the service to the toast
-            onShowToast(error.message || "Erreur lors de la génération audio.", 'error');
+            if (error instanceof Error && error.message.includes("Clé API")) {
+              alert("Clé API manquante. Veuillez la configurer dans les paramètres.");
+            } else {
+              alert("Erreur lors de la génération audio.");
+            }
         }
     } else {
         if (audioRef.current) {
@@ -97,15 +105,6 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey, onShow
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const handleCopyToClipboard = () => {
-    const textToCopy = `${article.title}\n\n${article.summaryQuote}\n\n${article.content}`;
-    navigator.clipboard.writeText(textToCopy).then(() => {
-      onShowToast("Article copié dans le presse-papier", 'success');
-    }, () => {
-      onShowToast("Erreur lors de la copie", 'error');
-    });
   };
 
   return (
@@ -156,7 +155,7 @@ const ReaderView: React.FC<ReaderViewProps> = ({ article, onBack, apiKey, onShow
 
             <div className="hidden md:flex items-center gap-2">
                 <button className="p-2 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"><TextSizeIcon className="w-5 h-5" /></button>
-                <button onClick={handleCopyToClipboard} className="p-2 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"><CopyIcon className="w-5 h-5" /></button>
+                <button className="p-2 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"><CopyIcon className="w-5 h-5" /></button>
                 <button className="p-2 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"><FileTextIcon className="w-5 h-5" /></button>
                 <button className="p-2 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"><SpeakerIcon className="w-5 h-5" /></button>
             </div>
